@@ -121,6 +121,14 @@ void send_message(const string& message, const string& peer_ip, int peer_port, i
         cout << "===================================================\n" << endl;
         return;
     }
+    
+    struct in_addr addr;
+    if (inet_pton(AF_INET, peer_ip.c_str(), &addr) != 1) {
+        cout << "\n===================================================" << endl;
+        cout << "  Invalid IP format. Exiting..." << endl;
+        cout << "===================================================\n" << endl;
+        exit(1);
+    }
 
     SOCKET sock;
     struct sockaddr_in server;
@@ -151,7 +159,7 @@ void send_message(const string& message, const string& peer_ip, int peer_port, i
         formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> [" + timestamp + "] DISCONNECT";
     else
         formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> [" + timestamp + "] @ <" + team_name + ">\n" + message + "\n";
-    
+
     send(sock, formatted_message.c_str(), formatted_message.size(), 0);
     cout << "\n===================================================" << endl;
     cout << "  Message sent to " << peer_ip << endl;
