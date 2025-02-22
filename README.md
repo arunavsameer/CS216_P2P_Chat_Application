@@ -3,9 +3,9 @@
 ## 🔹 Overview
 The P2P Chat System is a decentralized peer-to-peer (P2P) messaging application that enables users to communicate over a network without relying on a central server.
 
-💬 Features: Secure messaging, peer discovery, blacklisting, active peer tracking, and real-time communication.
+💬 Features: Secure messaging, peer discovery, blacklisting, active peer tracking, real-time communication, and *group chat support*.
 
-📡 Technology Used: C++ (Winsock2 API for networking).
+🐟 Technology Used: C++ (Winsock2 API for networking).
 
 ---
 
@@ -19,10 +19,11 @@ The P2P Chat System is a decentralized peer-to-peer (P2P) messaging application 
 ✅ 📢 Broadcast Messaging – Send a message to all connected peers at once.  
 ✅ 🤝 Connection Requests – Connect with active peers dynamically.  
 ✅ 🖥 Beautiful Console Output – Well-formatted UI for a smooth experience.  
+✅ 💬 *Group Chat Support* – Create and join chat groups for multi-peer conversations.  
 
 ---
 
-## 📥 Installation & Setup
+## 💞 Installation & Setup
 
 ### 🛠 Requirements
 - Windows OS (Required for Winsock2 API)
@@ -30,16 +31,16 @@ The P2P Chat System is a decentralized peer-to-peer (P2P) messaging application 
 
 ### 💻 Compiling & Running
 1. Open Command Prompt or Terminal  
-2. Compile the program using:  
-   sh
+2. Compile the program using:
+   ```sh
    g++ -o p2p_chat p2p_chat.cpp -lws2_32
    
-3. Run the executable:  
-   sh
+4. Run the executable:  
+   ```sh
    p2p_chat.exe
    
-4. Enter your team name and port number when prompted.  
-5. Start chatting! 🎉  
+5. Enter your team name and port number when prompted.  
+6. Start chatting! 🎉  
 
 ---
 
@@ -54,101 +55,68 @@ The P2P Chat System is a decentralized peer-to-peer (P2P) messaging application 
 | 5️⃣ Add IP to blacklist | Block an IP from sending messages. |
 | 6️⃣ Remove IP from blacklist | Unblock an IP address. |
 | 7️⃣ Show blacklist | Display all blacklisted IPs. |
+| 8️⃣ *Create group* | Create a new chat group. |
+| 9️⃣ *Join group* | Join an existing chat group. |
 | 0️⃣ Quit | Exit the application. |
 
 ---
 
 ## 🛠 How It Works
 
-📡 1. Starting the Application  
+📰 *1. Starting the Application*  
 - The user runs the program and enters a team name and port number.  
 - The application starts a server on the specified port to listen for incoming messages.  
 
-💬 2. Message Transmission  
+💬 *2. Message Transmission*  
 - Users can send messages to specific peers or broadcast messages to all connected peers.  
 - Messages include a timestamp and sender details.  
+- *Group messages* are sent to all members of a chat group.  
 
-🔍 3. Peer Discovery & Management  
-- The system automatically tracks active peers.  
+🔍 *3. Peer & Group Discovery*  
+- The system automatically tracks active peers and groups.  
 - Peers inactive for 600 seconds (10 minutes) are removed.  
 
-🔒 4. Blacklist Functionality  
+🔒 *4. Blacklist & Group Moderation*  
 - Users can add or remove IPs from the blacklist.  
 - Messages from blacklisted IPs are blocked and ignored.  
+- Group admins can block specific peers from a chat group.  
 
 ---
 
 ## 🎮 Example Usage
 
-### 🔥 Starting the Chat System
-sh
-Enter your team name: Team Alpha  
-Enter your port number: 5050  
-===================================================
-  🚀 Your local IP address: 192.168.1.100  
-===================================================
-
-
-### ✉ Sending a Message
-sh
-***** 📢 Chat Menu *****  
-1️⃣ Send message  
-2️⃣ Query active peers  
-3️⃣ Connect to active peers  
-4️⃣ Broadcast message  
-5️⃣ Add IP to blacklist  
-6️⃣ Remove IP from blacklist  
-7️⃣ Show blacklist  
-0️⃣ Quit  
-Enter choice: 1  
-
-Enter recipient's IP: 192.168.1.101  
-Enter recipient's port: 5051  
-Enter your message: Hello from Team Alpha!  
-===================================================
-  ✅ Message sent to 192.168.1.101  
-===================================================
-
-
-### 📥 Receiving a Message
-sh
-===================================================
-  📩 Message received at 2024-02-22 14:30:15  
-  📍 From: 192.168.1.101:5051  
-  💬 "Hello from 192.168.1.101!"  
-===================================================
-
+https://github.com/user-attachments/assets/cf661ae4-d44a-4013-b49d-a31ee81e4752
 
 ---
 
-## 🏗 Code Structure
+## Code Structure
 
-📌 Peer Management  
-   - Keeps track of active peers.  
+🔹 *Peer Management*  
+   - Tracks active peers and groups.  
    - Removes inactive peers after 10 minutes.  
 
-📌 Networking (Winsock2 API)  
+🔹 *Networking (Winsock2 API)*  
    - Uses TCP sockets for P2P communication.  
    - Runs a server to accept messages.  
 
-📌 Blacklist Management  
+🔹 *Blacklist & Group Management*  
    - Users can add/remove IPs from the blacklist.  
-   - Blocked IPs cannot send messages.  
+   - Group admins can manage members.  
 
-📌 🖥 Console Output  
+🔹 *🖥 Console Output*  
    - Well-structured messages for better readability.  
 
 ---
 
 ## 🚀 Future Enhancements
-🔹 🖥 GUI Interface - Replace console-based interaction with a graphical UI.  
-🔹 📂 File Sharing - Add support for peer-to-peer file transfers.  
-🔹 🔐 Encryption - Secure messages with end-to-end encryption.  
-🔹 🌍 Cross-Platform Support - Make it work on Linux & macOS.  
+🔹 🖥 *GUI Interface* - Replace console-based interaction with a graphical UI.  
+🔹 📂 *File Sharing* - Add support for peer-to-peer file transfers.  
+🔹 🔐 *Encryption* - Secure messages with end-to-end encryption.  
+🔹 🌍 *Cross-Platform Support* - Make it work on Linux & macOS.  
 
 ---
 
 ## 👥 Contributors
-- *Abhitulya Mishra (ee230002002)*  
-- *Arunav Sameer (cse230001010)*  
-- *Anmol Joshi (cse230001007)*  
+- Abhitulya Mishra (ee230002002)  
+- Arunav Sameer (cse230001010)  
+- Anmol Joshi (cse230001007)
