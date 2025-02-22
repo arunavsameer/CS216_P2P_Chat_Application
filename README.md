@@ -147,8 +147,3 @@ Enter your message: Hello from Team Alpha!
 🔹 **🌍 Cross-Platform Support** - Make it work on **Linux & macOS**.  
 
 ---
-
-## 📜 License
-This project is **open-source** and free to use. 🎉  
-
----
