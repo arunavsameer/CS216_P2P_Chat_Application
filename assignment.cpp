@@ -8,6 +8,8 @@
 #include <ws2tcpip.h>
 #include <string>
 #include <atomic>
+#include <ctime>
+#include <unordered_set>
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
@@ -24,6 +26,7 @@ string team_name;
 const vector<pair<string, int>> mandatory_peers = {{"10.206.4.122", 1255}, {"10.206.5.228", 6555}};
 atomic<bool> running(true);
 SOCKET global_server_socket = INVALID_SOCKET;
+unordered_set<string> blacklist;
 
 void ping_peers() {
     while (running) {
@@ -31,8 +34,10 @@ void ping_peers() {
         lock_guard<mutex> lock(peer_mutex);
         auto now = chrono::steady_clock::now();
         for (auto it = peers.begin(); it != peers.end();) {
-            if (chrono::duration_cast<chrono::seconds>(now - it->second.last_seen).count() > 600) { // 10 minutes
-                cout << "Removing inactive peer: " << it->first << endl;
+            if (chrono::duration_cast<chrono::seconds>(now - it->second.last_seen).count() > 600) {
+                cout << "\n===================================================" << endl;
+                cout << "  Removing inactive peer: " << it->first << endl;
+                cout << "===================================================\n" << endl;
                 it = peers.erase(it);
             } else {
                 ++it;
@@ -74,7 +79,9 @@ void handle_peer(string ip, int port) {
     string peer_key = ip + ":" + to_string(port);
     if (peers.find(peer_key) == peers.end()) {
         peers[peer_key] = {ip, port, chrono::steady_clock::now()};
-        cout << "Peer added: " << peer_key << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Peer added: " << peer_key << endl;
+        cout << "===================================================\n" << endl;
     } else {
         peers[peer_key].last_seen = chrono::steady_clock::now();
     }
@@ -82,25 +89,45 @@ void handle_peer(string ip, int port) {
 
 void query_peers() {
     lock_guard<mutex> lock(peer_mutex);
-    cout << "Connected peers:" << endl;
+    cout << "\n===================================================" << endl;
+    cout << "  Connected peers:" << endl;
     for (const auto& peer : peers) {
-        cout << peer.first << endl;
+        cout << "  " << peer.first << endl;
     }
+    cout << "===================================================\n" << endl;
 }
 
 void remove_peer(const string &peer_key) {
     lock_guard<mutex> lock(peer_mutex);
     if (peers.erase(peer_key)) {
-        cout << "Peer removed: " << peer_key << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Peer removed: " << peer_key << endl;
+        cout << "===================================================\n" << endl;
     }
 }
 
+string get_current_time() {
+    auto now = chrono::system_clock::now();
+    time_t now_c = chrono::system_clock::to_time_t(now);
+    char buffer[100];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&now_c));
+    return string(buffer);
+}
+
 void send_message(const string& message, const string& peer_ip, int peer_port, int my_port) {
+    if (blacklist.find(peer_ip) != blacklist.end()) {
+        cout << "\n===================================================" << endl;
+        cout << "  Cannot send message to blacklisted IP: " << peer_ip << endl;
+        cout << "===================================================\n" << endl;
+        return;
+    }
+
     SOCKET sock;
     struct sockaddr_in server;
-
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-        cout << "Socket creation failed." << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Socket creation failed." << endl;
+        cout << "===================================================\n" << endl;
         return;
     }
 
@@ -109,8 +136,9 @@ void send_message(const string& message, const string& peer_ip, int peer_port, i
     inet_pton(AF_INET, peer_ip.c_str(), &server.sin_addr);
 
     if (connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0) {
-        cout << "Connection failed to " << peer_ip << ":" << peer_port << endl;
-        // Remove the peer from the peer list if connection fails
+        cout << "\n===================================================" << endl;
+        cout << "  Connection failed to " << peer_ip << ":" << peer_port << endl;
+        cout << "===================================================\n" << endl;
         string peer_key = peer_ip + ":" + to_string(peer_port);
         remove_peer(peer_key);
         closesocket(sock);
@@ -118,13 +146,16 @@ void send_message(const string& message, const string& peer_ip, int peer_port, i
     }
 
     string formatted_message;
+    string timestamp = get_current_time();
     if (message == "DISCONNECT")
-        formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> DISCONNECT";
+        formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> [" + timestamp + "] DISCONNECT";
     else
-        formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> @ <" + team_name + ">\n" + message + "\n<end>";
+        formatted_message = "<" + peer_ip + ":" + to_string(my_port) + "> [" + timestamp + "] @ <" + team_name + ">\n" + message + "\n<end>";
     
     send(sock, formatted_message.c_str(), formatted_message.size(), 0);
-    cout << "Message sent to " << peer_ip << endl;
+    cout << "\n===================================================" << endl;
+    cout << "  Message sent to " << peer_ip << endl;
+    cout << "===================================================\n" << endl;
     closesocket(sock);
 }
 
@@ -134,7 +165,9 @@ void start_server(int my_port) {
     int c;
 
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-        cout << "Socket creation failed." << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Socket creation failed." << endl;
+        cout << "===================================================\n" << endl;
         return;
     }
     global_server_socket = server_socket;
@@ -144,13 +177,17 @@ void start_server(int my_port) {
     server.sin_port = htons(my_port);
 
     if (bind(server_socket, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
-        cout << "Binding failed." << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Binding failed." << endl;
+        cout << "===================================================\n" << endl;
         closesocket(server_socket);
         return;
     }
 
     listen(server_socket, 3);
-    cout << "Server listening on port " << my_port << endl;
+    cout << "\n===================================================" << endl;
+    cout << "  Server listening on port " << my_port << endl;
+    cout << "===================================================\n" << endl;
 
     c = sizeof(struct sockaddr_in);
     while (running) {
@@ -164,7 +201,14 @@ void start_server(int my_port) {
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client.sin_addr, client_ip, INET_ADDRSTRLEN);
 
-        // Receive the incoming message
+        if (blacklist.find(client_ip) != blacklist.end()) {
+            cout << "\n===================================================" << endl;
+            cout << "  Ignored message from blacklisted IP: " << client_ip << endl;
+            cout << "===================================================\n" << endl;
+            closesocket(client_socket);
+            continue;
+        }
+
         char buffer[1024] = {0};
         int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
         string msg;
@@ -173,7 +217,6 @@ void start_server(int my_port) {
             msg = buffer;
         }
 
-        // Parse sender's intended port from the message header.
         int sender_port = 0;
         if (!msg.empty() && msg.front() == '<') {
             size_t gt = msg.find('>');
@@ -183,18 +226,16 @@ void start_server(int my_port) {
                     try {
                         sender_port = stoi(msg.substr(colon + 1, gt - colon - 1));
                     } catch (exception &e) {
-                        sender_port = ntohs(client.sin_port); // fallback
+                        sender_port = ntohs(client.sin_port);
                     }
                 }
             }
         }
         if (sender_port == 0)
-            sender_port = ntohs(client.sin_port); // fallback if header not parsed
+            sender_port = ntohs(client.sin_port);
 
-        // Update peer using the parsed port.
         handle_peer(client_ip, sender_port);
 
-        // Extract message content (after header)
         string content = msg;
         size_t pos = content.find("> ");
         if (pos != string::npos)
@@ -203,12 +244,19 @@ void start_server(int my_port) {
         if (content == "DISCONNECT") {
             string peer_key = string(client_ip) + ":" + to_string(sender_port);
             remove_peer(peer_key);
-            cout << "Peer " << peer_key << " has disconnected." << endl;
+            cout << "\n===================================================" << endl;
+            cout << "  Peer " << peer_key << " has disconnected." << endl;
+            cout << "===================================================\n" << endl;
         } else {
             if (!msg.empty()) {
-                cout << "Message from " << client_ip << ":" << sender_port << " - " <<endl << msg << endl;
+                string timestamp = get_current_time();
+                cout << "\n===================================================" << endl;
+                cout << "  Message received at " << timestamp << " from " << client_ip << ":" << sender_port << " - " << endl << msg << endl;
+                cout << "===================================================\n" << endl;
             } else {
-                cout << "No message received from " << client_ip << endl;
+                cout << "\n===================================================" << endl;
+                cout << "  No message received from " << client_ip << endl;
+                cout << "===================================================\n" << endl;
             }
         }
         closesocket(client_socket);
@@ -217,48 +265,81 @@ void start_server(int my_port) {
     closesocket(server_socket);
 }
 
+void add_to_blacklist(const string& ip) {
+    blacklist.insert(ip);
+    cout << "\n===================================================" << endl;
+    cout << "  " << ip << " has been BLACKLISTED." << endl;
+    cout << "===================================================\n" << endl;
+}
 
+void remove_from_blacklist(const string& ip) {
+    if (blacklist.erase(ip)) {
+        cout << "\n===================================================" << endl;
+        cout << "  Removed " << ip << " from blacklist" << endl;
+        cout << "===================================================\n" << endl;
+    } else {
+        cout << "\n===================================================" << endl;
+        cout << "  " << ip << " not found in blacklist" << endl;
+        cout << "===================================================\n" << endl;
+    }
+}
+
+void show_blacklist() {
+    if (blacklist.empty()) {
+        cout << "\n===================================================" << endl;
+        cout << "  Blacklist is empty" << endl;
+        cout << "===================================================\n" << endl;
+    } else {
+        cout << "\n===================================================" << endl;
+        cout << "  Blacklisted IPs:" << endl;
+        for (const auto& ip : blacklist) {
+            cout << "  " << ip << endl;
+        }
+        cout << "===================================================\n" << endl;
+    }
+}
 
 int main() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
-        cout << "Failed to initialize Winsock." << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Failed to initialize Winsock." << endl;
+        cout << "===================================================\n" << endl;
         return 1;
     }
 
-    int my_port;
     cout << "Enter your team name: ";
     getline(cin, team_name);
+
+    int my_port;
     cout << "Enter your port number: ";
-    
     cin >> my_port;
     if(my_port < 1024 or my_port > 65535){
-        cout << "invalid port number. range is 1024-65535" << endl;
+        cout << "\n===================================================" << endl;
+        cout << "  Invalid port number. Range is 1024-65535" << endl;
+        cout << "===================================================\n" << endl;
         return 1;
     }
 
     cout << endl;
-
     string local_ip = get_local_ip();
-    cout << "Your local IP address: " << local_ip << endl;
+    cout << "\n===================================================" << endl;
+    cout << "  Your local IP address: " << local_ip << endl;
+    cout << "===================================================\n" << endl;
 
     thread server_thread(start_server, my_port);
     thread ping_thread(ping_peers);
 
-    // Send mandatory messages asynchronously
-    // for (const auto& peer : mandatory_peers) {
-    //     thread(send_message, "Hello", peer.first, peer.second, my_port).detach();
-    // }
-
     while (true) {
-
-        this_thread::sleep_for(chrono::seconds(1)); // taaki acche se dikhe
-
+        this_thread::sleep_for(chrono::seconds(1));
         cout << "\n***** Menu *****" << endl;
         cout << "1. Send message" << endl;
         cout << "2. Query active peers" << endl;
         cout << "3. Connect to active peers" << endl;
         cout << "4. Broadcast message" << endl;
+        cout << "5. Add IP to blacklist" << endl;
+        cout << "6. Remove IP from blacklist" << endl;
+        cout << "7. Show blacklist" << endl;
         cout << "0. Quit" << endl;
         cout << "Enter choice: ";
 
@@ -285,7 +366,9 @@ int main() {
                     thread(send_message, "CONNECTION_REQUEST", peer.second.ip, peer.second.port, my_port).detach();
                 }
             }
-            cout << "Connection requests sent to active peers." << endl;
+            cout << "\n===================================================" << endl;
+            cout << "  Connection requests sent to active peers." << endl;
+            cout << "===================================================\n" << endl;
         } else if (choice == 4) {
             cout << "Enter broadcast message: ";
             cin.ignore();
@@ -297,17 +380,29 @@ int main() {
                     thread(send_message, bmsg, peer.second.ip, peer.second.port, my_port).detach();
                 }
             }
-            cout << "Broadcast message sent to all connected peers." << endl;
+            cout << "\n===================================================" << endl;
+            cout << "  Broadcast message sent to all connected peers." << endl;
+            cout << "===================================================\n" << endl;
+        } else if (choice == 5) {
+            string ip;
+            cout << "Enter IP to blacklist: ";
+            cin >> ip;
+            add_to_blacklist(ip);
+        } else if (choice == 6) {
+            string ip;
+            cout << "Enter IP to remove from blacklist: ";
+            cin >> ip;
+            remove_from_blacklist(ip);
+        } else if (choice == 7) {
+            show_blacklist();
         } else if (choice == 0) {
-            cout << "Exiting..." << endl;
-            // Send a disconnect message to all connected peers
-            {
-                lock_guard<mutex> lock(peer_mutex);
-                for (const auto& peer : peers) {
-                    thread(send_message, "DISCONNECT", peer.second.ip, peer.second.port, my_port).detach();
-                }
+            cout << "\n===================================================" << endl;
+            cout << "  Exiting..." << endl;
+            cout << "===================================================\n" << endl;
+            lock_guard<mutex> lock(peer_mutex);
+            for (const auto& peer : peers) {
+                thread(send_message, "DISCONNECT", peer.second.ip, peer.second.port, my_port).detach();
             }
-            // Signal the threads to stop and close the listening socket to unblock accept().
             running = false;
             if (global_server_socket != INVALID_SOCKET)
                 closesocket(global_server_socket);
