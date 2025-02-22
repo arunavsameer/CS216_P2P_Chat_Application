@@ -1,4 +1,3 @@
-```md
 # 🚀 P2P Chat System
 
 ## 🔹 Overview
@@ -153,4 +152,3 @@ Enter your message: Hello from Team Alpha!
 This project is **open-source** and free to use. 🎉  
 
 ---
-'''
