@@ -1,5 +1,3 @@
-Here's a GitHub-friendly **README.md** file. You can copy and paste it directly into your repository.  
-
 ```md
 # 🚀 P2P Chat System
 
@@ -155,8 +153,4 @@ Enter your message: Hello from Team Alpha!
 This project is **open-source** and free to use. 🎉  
 
 ---
-
-Hope this helps! 🚀 Copy and paste this into your **README.md** file on GitHub. 🎯  
-```
-
-Let me know if you need modifications! 🚀🔥
+'''
