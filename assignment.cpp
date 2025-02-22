@@ -10,6 +10,9 @@
 #include <atomic>
 #include <ctime>
 #include <unordered_set>
+#include <sstream>
+#include <random>
+#include <queue>
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
@@ -23,10 +26,14 @@ struct Peer{
 mutex peer_mutex;
 map<string, Peer> peers;
 string team_name;
+string current_group = "";
 const vector<pair<string, int>> mandatory_peers = {{"10.206.4.122", 1255}, {"10.206.5.228", 6555}};
 atomic<bool> running(true);
 SOCKET global_server_socket = INVALID_SOCKET;
 unordered_set<string> blacklist;
+mutex queue_mutex;
+queue<string> message_queue;
+atomic<bool> in_group(false);
 
 void ping_peers(){
     while (running){
@@ -249,23 +256,52 @@ void start_server(int my_port){
         if (pos != string::npos)
             content = content.substr(pos + 2);
 
-        if (content == "DISCONNECT"){
-            string peer_key = string(client_ip) + ":" + to_string(sender_port);
-            remove_peer(peer_key);
-            cout << "\n===================================================" << endl;
-            cout << "  Peer " << peer_key << " has disconnected." << endl;
-            cout << "===================================================\n" << endl;
-        } else {
-            if (!msg.empty()){
-                string timestamp = get_current_time();
+        if (!msg.empty()){
+            if (msg.rfind("GROUP_INVITE ", 0) == 0) {
+                istringstream iss(msg);
+                string command, room_code_invite;
+                iss >> command >> room_code_invite;
+                cout << "\nReceived group invitation for room " << room_code_invite << endl;
+                // Optionally, auto-connect or ask the user to join.
+            } else if (msg == "DISCONNECT") {
+                string peer_key = string(client_ip) + ":" + to_string(sender_port);
+                remove_peer(peer_key);
                 cout << "\n===================================================" << endl;
-                cout << "  Message received at " << timestamp << " from " << client_ip << ":" << sender_port << " - " << endl << msg << endl;
+                cout << "  Peer " << peer_key << " has disconnected." << endl;
                 cout << "===================================================\n" << endl;
             } else {
-                cout << "\n===================================================" << endl;
-                cout << "  No message received from " << client_ip << endl;
-                cout << "===================================================\n" << endl;
+                string timestamp = get_current_time();
+                if (in_group) {
+                    // When in group mode, if the current group code is found anywhere in the message, display it.
+                    if (msg.find(current_group) != string::npos) {
+                        cout << "\n===================================================" << endl;
+                        cout << "  Group Message (" << current_group << ") received at " << timestamp << ":" << endl;
+                        cout << msg << endl;
+                        cout << "===================================================\n" << endl;
+                    } else {
+                        lock_guard<mutex> lock(queue_mutex);
+                        message_queue.push("\n===================================================\nMessage received at " + timestamp + " from " +
+                                           string(client_ip) + ":" + to_string(sender_port) + " - " + msg +
+                                           "\n===================================================\n");
+                    }
+                } else {
+                    // Not in group mode: if the message contains "GROUP", ignore it.
+                    if (msg.find("GROUP") != string::npos) {
+                        // Silently ignore group messages when not in group mode.
+                    } else {
+                        // Normal non-group message: display immediately.
+                        cout << "\n===================================================" << endl;
+                        cout << "  Message received at " << timestamp << " from " 
+                             << client_ip << ":" << sender_port << " - " << endl;
+                        cout << msg << endl;
+                        cout << "===================================================\n" << endl;
+                    }
+                }
             }
+        } else {
+            cout << "\n===================================================" << endl;
+            cout << "  No message received from " << client_ip << endl;
+            cout << "===================================================\n" << endl;
         }
         closesocket(client_socket);
     }
@@ -304,6 +340,87 @@ void show_blacklist(){
             cout << "  " << ip << endl;
         }
         cout << "===================================================\n" << endl;
+    }
+}
+
+string generate_room_code() {
+    const string digits = "0123456789";
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> dis(0, digits.size()-1);
+    string code;
+    for (int i = 0; i < 8; i++) {
+        code.push_back(digits[dis(gen)]);
+    }
+    return code;
+}
+
+void group_chat_loop(int my_port, const string &room_code) {
+    in_group = true;  // Now in group chat mode.
+    cout << "\n===================================================" << endl;
+    cout << "  You are now in group chat room: " << room_code << endl;
+    cout << "  Type your message and press Enter. Type '/exit' to leave." << endl;
+    cout << "  To inform a peer, type: /inform <ip>:<port>" << endl;
+    cout << "===================================================\n" << endl;
+  
+    string input;
+    while (true) {
+        getline(cin, input);
+        
+        if (input == "/exit") {
+            // Before exiting, send an exit message to the group.
+            string timestamp = get_current_time();
+            string exit_msg = "GROUP " + room_code + " [" + team_name + "] is leaving group chat (" + timestamp + ")";
+            {
+                lock_guard<mutex> lock(peer_mutex);
+                for (const auto& peer : peers) {
+                    thread(send_message, exit_msg, peer.second.ip, peer.second.port, my_port).detach();
+                }
+            }
+            cout << "\nExiting group chat...\n" << endl;
+            in_group = false;  // No longer in group chat.
+            break;
+        }
+        
+        // Handle the /inform command.
+        if (input.rfind("/inform ", 0) == 0) {
+            string ipport = input.substr(8); // Remove "/inform "
+            size_t colon = ipport.find(':');
+            if (colon != string::npos) {
+                string target_ip = ipport.substr(0, colon);
+                int target_port = stoi(ipport.substr(colon + 1));
+                string timestamp = get_current_time();
+                string invite_msg = "GROUUP_INVITE " + room_code + " [" + team_name + "] (" + timestamp + ")";
+                thread(send_message, invite_msg, target_ip, target_port, my_port).detach();
+                cout << "Sent group invitation to " << target_ip << ":" << target_port << endl;
+            } else {
+                cout << "Invalid format for /inform. Use: /inform <ip>:<port>" << endl;
+            }
+            continue;
+        }
+      
+        // Otherwise, send a normal group message.
+        string timestamp = get_current_time();
+        string group_msg = "GROUP " + room_code + " [" + team_name + "] (" + timestamp + ")\n" + input;
+        {
+            lock_guard<mutex> lock(peer_mutex);
+            for (const auto& peer : peers) {
+                thread(send_message, group_msg, peer.second.ip, peer.second.port, my_port).detach();
+            }
+        }
+    }
+    
+    // After exiting group chat, output any stored (non-group) messages.
+    {
+       lock_guard<mutex> lock(queue_mutex);
+       if (!message_queue.empty()) {
+         cout << "\n==== Missed Messages While in Group Chat ====\n";
+         while (!message_queue.empty()){
+              cout << message_queue.front();
+              message_queue.pop();
+         }
+         cout << "============================================\n";
+       }
     }
 }
 
@@ -348,13 +465,49 @@ int main(){
         cout << "5. Add IP to blacklist" << endl;
         cout << "6. Remove IP from blacklist" << endl;
         cout << "7. Show blacklist" << endl;
+        cout << "8. Create Group" << endl;
+        cout << "9. Join Group" << endl;
         cout << "0. Quit" << endl;
         cout << "Enter choice: ";
 
         int choice;
         cin >> choice;
-
-        if (choice == 1){
+        
+        if (choice == 8) {
+            // Create group: generate a room code and enter group chat mode.
+            string room_code = generate_room_code();
+            current_group = room_code;
+            cout << "\n===================================================" << endl;
+            cout << "  Group created. Your room code is: " << room_code << endl;
+            cout << "  Share this code with peers to allow them to join." << endl;
+            cout << "===================================================\n" << endl;
+            cin.ignore(); // clear newline
+            group_chat_loop(my_port, room_code);
+            current_group = ""; // Exit group mode.
+        } else if (choice == 9) {
+            // Join group: ask for a room code.
+            cout << "Enter room code to join: ";
+            string room_code;
+            cin >> room_code;
+            
+            // Execute connection to active peers just as in choice 3.
+            {
+                lock_guard<mutex> lock(peer_mutex);
+                for (const auto& peer : peers) {
+                    thread(send_message, "CONNECTION_REQUEST", peer.second.ip, peer.second.port, my_port).detach();
+                }
+                cout << "\nConnection requests sent to active peers." << endl;
+            }
+            
+            current_group = room_code;
+            cout << "\n===================================================" << endl;
+            cout << "  Joined group chat room: " << room_code << endl;
+            cout << "  Type '/exit' to leave group chat." << endl;
+            cout << "===================================================\n" << endl;
+            cin.ignore(); // clear newline
+            group_chat_loop(my_port, room_code);
+            current_group = ""; // Exit group mode.
+        } else if (choice == 1){
             string target_ip, message;
             int target_port;
             cout << "Enter recipient's IP: ";
@@ -368,6 +521,7 @@ int main(){
         } else if (choice == 2){
             query_peers();
         } else if (choice == 3){
+            
             {
                 lock_guard<mutex> lock(peer_mutex);
                 for (const auto& peer : peers){
@@ -403,6 +557,9 @@ int main(){
             remove_from_blacklist(ip);
         } else if (choice == 7){
             show_blacklist();
+        } else if (choice == 8){
+            string room_code = generate_room_code();
+            group_chat_loop(my_port, room_code);
         } else if (choice == 0){
             cout << "\n===================================================" << endl;
             cout << "  Exiting..." << endl;
